@@ -4,7 +4,8 @@ import XCTest
 import AppCore
 @testable import MyApp
 
-/// One snapshot per state in the specs/starter.md "States" table, in light and dark mode.
+/// One snapshot per state in the "States" tables of specs/starter.md and specs/search.md,
+/// in light and dark mode.
 /// Images: ios/AppTests/__Snapshots__/ScreenshotTests/<test>.<light|dark>.png
 /// Record by setting `record: .all` below (or SNAPSHOT_TESTING_RECORD=all), then look at the images.
 @MainActor
@@ -25,6 +26,15 @@ final class ScreenshotTests: XCTestCase {
 
     func testListScreen_empty() {
         snap(AppRoot(repository: .empty, path: [.list]))
+    }
+
+    // specs/search.md
+    func testListScreen_search_planet() {
+        snap(AppRoot(repository: ItemRepository(), path: [.list], listQuery: "planet"))
+    }
+
+    func testListScreen_search_noresults() {
+        snap(AppRoot(repository: ItemRepository(), path: [.list], listQuery: "pluto"))
     }
 
     func testDetailScreen_earth() {
