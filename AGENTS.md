@@ -44,6 +44,9 @@ scripts/                      # helper scripts (cloud environment setup, etc.)
 5. **Asking for a Mac run:** add the `ios` label to the PR and comment `@claude` with what to do
    (e.g. "@claude build, run on the simulator, compare with the spec, fix and record snapshots").
    Mac minutes are scarce, so batch the requests and keep each run short.
+   For a recorded iOS walk-through (every `.maestro/` flow on the simulator, as a video), add the `walkthrough` label
+   instead; no `@claude` comment is needed. The video link is posted on the PR. Keep flows working on both platforms:
+   any new screen needs its Maestro steps for iOS too.
 6. **Secrets:** never put signing keys or tokens in code or in the cloud environment's variables. They live in GitHub or Codemagic secrets.
 
 ## Definition of done
