@@ -40,9 +40,16 @@ final class ScreenshotTests: XCTestCase {
     ) {
         for (name, style) in [("light", UIUserInterfaceStyle.light), ("dark", .dark)] {
             let controller = UIHostingController(rootView: view)
+            // Put the controller in a real window and let the NavigationStack lay out its
+            // pushed screen (title + back button) before the image is taken.
+            let window = UIWindow(frame: UIScreen.main.bounds)
+            window.overrideUserInterfaceStyle = style
+            window.rootViewController = controller
+            window.makeKeyAndVisible()
+            RunLoop.main.run(until: Date().addingTimeInterval(1.0))
             assertSnapshot(
                 of: controller,
-                as: .image(on: .iPhone13, traits: UITraitCollection(userInterfaceStyle: style)),
+                as: .image(on: .iPhone13, drawHierarchyInKeyWindow: true, traits: UITraitCollection(userInterfaceStyle: style)),
                 named: name,
                 file: file,
                 testName: testName,
