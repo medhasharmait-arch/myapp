@@ -4,7 +4,8 @@ import XCTest
 import AppCore
 @testable import MyApp
 
-/// One snapshot per state in the specs/starter.md "States" table, in light and dark mode.
+/// One snapshot per state in the "States" tables of specs/starter.md and specs/search.md,
+/// in light and dark mode.
 /// Images: ios/AppTests/__Snapshots__/ScreenshotTests/<test>.<light|dark>.png
 /// Record by setting `record: .all` below (or SNAPSHOT_TESTING_RECORD=all), then look at the images.
 @MainActor
@@ -27,13 +28,27 @@ final class ScreenshotTests: XCTestCase {
         snap(AppRoot(repository: .empty, path: [.list]))
     }
 
+    // specs/search.md
+    func testListScreen_search_planet() {
+        snap(AppRoot(repository: ItemRepository(), path: [.list], listQuery: "planet"), precision: searchPrecision)
+    }
+
+    func testListScreen_search_noresults() {
+        snap(AppRoot(repository: ItemRepository(), path: [.list], listQuery: "pluto"), precision: searchPrecision)
+    }
+
     func testDetailScreen_earth() {
         let earth = ItemRepository().item(id: "3")!
         snap(AppRoot(repository: ItemRepository(), path: [.list, .detail(earth)]))
     }
 
+    /// The search field's clear (x) button appears a moment after the first layout, so it is in some
+    /// runs and not in others. 1% of the pixels is far more than that icon and far less than any real change.
+    private let searchPrecision: Float = 0.99
+
     private func snap(
         _ view: some View,
+        precision: Float = 1,
         file: StaticString = #filePath,
         testName: String = #function,
         line: UInt = #line
@@ -49,7 +64,7 @@ final class ScreenshotTests: XCTestCase {
             RunLoop.main.run(until: Date().addingTimeInterval(1.0))
             assertSnapshot(
                 of: controller,
-                as: .image(on: .iPhone13, drawHierarchyInKeyWindow: true, traits: UITraitCollection(userInterfaceStyle: style)),
+                as: .image(on: .iPhone13, drawHierarchyInKeyWindow: true, precision: precision, traits: UITraitCollection(userInterfaceStyle: style)),
                 named: name,
                 file: file,
                 testName: testName,

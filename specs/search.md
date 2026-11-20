@@ -7,7 +7,9 @@ Status: ready to build. Builds on [`starter.md`](starter.md). Still no backend; 
 `ListScreen` gets a search field directly under its top bar.
 
 - Placeholder text: "Search planets". It has a leading search icon.
-- While the field has text, it shows a clear button (accessibility label "Clear search") that empties the field.
+- While the field has text, it shows a clear button that empties the field.
+  - Android: accessibility label "Clear search".
+  - iOS: the native search bar (`.searchable`) and its built-in clear button, which the system labels "Clear text".
 - Typing filters the list immediately; there is no submit button.
 - An item matches when its `title` **or** its `subtitle` contains the query:
   - matching is case-insensitive,
