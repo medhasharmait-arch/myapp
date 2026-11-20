@@ -51,6 +51,9 @@ jobs:
     env:
       MAESTRO_VERSION: 2.12.1
       MAESTRO_CLI_NO_ANALYTICS: "1"
+      # A cold CI simulator needs longer than Maestro's default to start its XCTest driver
+      # (same value as Maestro's own iOS CI).
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "240000"
       APP_ID: com.myapp.ios
       PREFERRED_DEVICE: iPhone 17
       # Same SwiftPM workaround as ios-claude.yml: this runner's git sets
@@ -117,13 +120,26 @@ jobs:
           xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
           xcrun simctl install "$UDID" "$APP"
 
+      # Start Maestro's XCTest driver once, outside the recording, and keep it installed:
+      # by default every maestro run reinstalls the driver and uninstalls it on exit.
+      - name: Warm up the Maestro driver
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            if maestro --device "$UDID" hierarchy --no-reinstall-driver >/dev/null; then
+              echo "Driver ready (attempt $attempt)"; exit 0
+            fi
+            echo "Driver not ready, retrying ($attempt)"; sleep 10
+          done
+          echo "Maestro driver did not start"; exit 1
+
       - name: Run Maestro flows while recording
         run: |
           xcrun simctl io "$UDID" recordVideo --codec=h264 --force walkthrough.mp4 &
           REC_PID=$!
           sleep 3
           set +e
-          maestro --device "$UDID" test -e APP_ID="$APP_ID" \
+          maestro --device "$UDID" test --no-reinstall-driver -e APP_ID="$APP_ID" \
             --format junit --output maestro-report.xml --debug-output maestro-debug .maestro/
           STATUS=$?
           set -e
