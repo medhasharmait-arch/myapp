@@ -35,13 +35,20 @@ class ScreenshotTest {
     @Test fun listEmptyLight() = snap("ListScreen_empty", dark = false) { list(ItemRepository.empty()) }
     @Test fun listEmptyDark() = snap("ListScreen_empty", dark = true) { list(ItemRepository.empty()) }
 
+    // specs/search.md
+    @Test fun listSearchLight() = snap("ListScreen_search_planet", dark = false) { list(ItemRepository(), "planet") }
+    @Test fun listSearchDark() = snap("ListScreen_search_planet", dark = true) { list(ItemRepository(), "planet") }
+
+    @Test fun listNoResultsLight() = snap("ListScreen_search_noresults", dark = false) { list(ItemRepository(), "pluto") }
+    @Test fun listNoResultsDark() = snap("ListScreen_search_noresults", dark = true) { list(ItemRepository(), "pluto") }
+
     @Test fun detailEarthLight() = snap("DetailScreen_earth", dark = false) { earth() }
     @Test fun detailEarthDark() = snap("DetailScreen_earth", dark = true) { earth() }
 
     @Composable private fun home() = HomeScreen(onSeePlanets = {})
 
-    @Composable private fun list(repository: ItemRepository) =
-        ListScreen(items = repository.items(), onBack = {}, onItemClick = {})
+    @Composable private fun list(repository: ItemRepository, query: String = "") =
+        ListScreen(items = repository.items(), query = query, onQueryChange = {}, onBack = {}, onItemClick = {})
 
     @Composable private fun earth() =
         DetailScreen(item = requireNotNull(ItemRepository().item("3")), onBack = {})

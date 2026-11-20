@@ -2,6 +2,10 @@ package com.myapp.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,8 +32,12 @@ fun MyAppNavHost(repository: ItemRepository = ItemRepository()) {
             HomeScreen(onSeePlanets = { navController.navigate(Routes.LIST) })
         }
         composable(Routes.LIST) {
+            // Survives rotation; a fresh visit from Home starts empty (specs/search.md).
+            var query by rememberSaveable { mutableStateOf("") }
             ListScreen(
                 items = repository.items(),
+                query = query,
+                onQueryChange = { query = it },
                 onBack = { navController.popBackStack() },
                 onItemClick = { navController.navigate(Routes.detail(it.id)) },
             )

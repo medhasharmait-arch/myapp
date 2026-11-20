@@ -26,6 +26,31 @@ class ItemRepositoryTest {
         assertNull(repository.item("42"))
     }
 
+    // Examples table in specs/search.md.
+    @Test
+    fun `blank query returns every item in order`() {
+        val all = ItemRepository().items()
+        assertEquals(all, ItemRepository().search(""))
+        assertEquals(all, ItemRepository().search("   "))
+    }
+
+    @Test
+    fun `search matches subtitles and keeps order`() {
+        assertEquals(listOf("Venus", "Mars", "Jupiter"), ItemRepository().search("planet").map { it.title })
+    }
+
+    @Test
+    fun `search is case-insensitive and trims the query`() {
+        assertEquals(listOf("Earth"), ItemRepository().search("EARTH").map { it.title })
+        assertEquals(listOf("Mars"), ItemRepository().search("  mars ").map { it.title })
+    }
+
+    @Test
+    fun `search with no match returns nothing`() {
+        assertTrue(ItemRepository().search("pluto").isEmpty())
+        assertTrue(ItemRepository.empty().search("").isEmpty())
+    }
+
     @Test
     fun `empty repository returns no items`() {
         assertTrue(ItemRepository.empty().items().isEmpty())
