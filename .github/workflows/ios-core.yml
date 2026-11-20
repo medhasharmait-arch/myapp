@@ -1,0 +1,36 @@
+name: ios-core
+
+on:
+  pull_request:
+    paths:
+      - "ios/Packages/**"
+      - ".github/workflows/ios-core.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/Packages/**"
+      - ".github/workflows/ios-core.yml"
+
+concurrency:
+  group: ios-core-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  swift-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: swift:6.4-noble
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: ios/Packages/AppCore/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Packages/AppCore/Package.swift', 'ios/Packages/AppCore/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: swift test
+        run: swift test --package-path ios/Packages/AppCore
