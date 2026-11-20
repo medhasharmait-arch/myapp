@@ -1,0 +1,34 @@
+# Starter flow (specs/starter.md): Home -> List -> Detail -> back -> back.
+# Android: maestro test -e APP_ID=com.myapp .maestro/starter.yaml
+# iOS:     maestro test -e APP_ID=com.myapp.ios .maestro/starter.yaml
+appId: ${APP_ID}
+---
+- launchApp
+- assertVisible: "Hello!"
+- tapOn: "See the planets"
+- assertVisible: "Planets"
+- assertVisible: "Mercury"
+- tapOn: "Earth"
+- assertVisible: "Home"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Planets"   # iOS back button carries the previous screen's title
+- assertVisible: "Mercury"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Back"
+- assertVisible: "Hello!"

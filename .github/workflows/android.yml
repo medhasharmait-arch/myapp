@@ -1,0 +1,63 @@
+name: android
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+
+      # JDK 21 runs the Robolectric tests (Android SDK 36 needs Java 21); JDK 17 is listed
+      # last so it becomes JAVA_HOME and builds the app, like the cloud environment.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests + screenshot check
+        run: ./gradlew :app:testDebugUnitTest :app:verifyRoborazziDebug
+
+      - name: Debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 3
+
+      - name: Upload screenshot diffs and test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            android/app/build/outputs/roborazzi/
+            android/app/build/reports/tests/
+          retention-days: 3
