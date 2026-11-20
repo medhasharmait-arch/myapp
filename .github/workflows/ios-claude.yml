@@ -1,0 +1,73 @@
+# Mac run for the SwiftUI app (AGENTS.md rule 5).
+#
+# Trigger: on a PR that has the `ios` label, comment `@claude <what to do>`, e.g.
+#   @claude build, run on the simulator, compare with the spec, fix and record snapshots
+#
+# One-time setup (repository Settings -> Secrets and variables -> Actions):
+#   CLAUDE_CODE_OAUTH_TOKEN  from `claude setup-token` (uses your Claude subscription), or
+#   swap the input below to `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` for API billing.
+# The Claude GitHub App must be installed on the repository.
+#
+# macOS minutes cost ~10x Linux minutes: the job only starts for repo owners/members/collaborators,
+# only on labelled PRs, and is capped by timeout-minutes and --max-turns.
+name: ios-claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+# One Mac run per PR at a time. Later requests queue instead of cancelling a run that may be
+# halfway through committing snapshots.
+concurrency:
+  group: ios-claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude-mac:
+    if: >-
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+          contains(github.event.issue.labels.*.name, 'ios')) ||
+        (github.event_name == 'pull_request_review_comment' &&
+          contains(github.event.pull_request.labels.*.name, 'ios'))
+      )
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Show Xcode and available simulators
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep -E "iPhone" | head -20
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-mac-${{ hashFiles('ios/project.yml', 'ios/Packages/**/Package.swift') }}
+          restore-keys: spm-mac-
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@claude"
+          use_sticky_comment: true
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(xcodegen:*),Bash(xcodebuild:*),Bash(xcrun:*),Bash(swift:*),Bash(git:*),Bash(ls:*),Bash(find:*),Bash(open:*),Bash(sips:*)"
+            --append-system-prompt "You are on a macOS GitHub runner doing the Mac part of this repo's workflow. Read AGENTS.md first and follow it. Mac minutes are scarce: do only what the comment asks, keep the run short, and do not touch android/. Generate the project with `xcodegen generate --spec ios/project.yml` (never edit or commit any .xcodeproj). Build and test with `xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 16'`; if that simulator is missing, pick an available iPhone from `xcrun simctl list devices available` and say which one you used. The snapshot tests record missing reference images on the first run (that run fails by design), so run the tests a second time and confirm they pass. Before committing, Read every PNG under ios/AppTests/__Snapshots__/ and compare it with the spec it belongs to under specs/; fix the SwiftUI code if it does not match, then re-record (delete the stale PNGs and run twice). Commit fixes and images to the PR branch. In your final comment, list each snapshot with a one-line description of what it shows, and anything you could not finish."
