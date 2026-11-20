@@ -23,10 +23,10 @@ xcodegen generate --spec ios/project.yml
 ```
 
 ```bash
-xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-If the simulator image has no iPhone 16, pick another iPhone from `xcrun simctl list devices available`.
+If the runner image has no iPhone 17, pick another iPhone from `xcrun simctl list devices available`.
 
 ## Snapshots
 
@@ -37,7 +37,7 @@ If the simulator image has no iPhone 16, pick another iPhone from `xcrun simctl 
 - **Re-recording after a UI change.** Delete the stale PNGs and run the tests twice.
 - **Before committing.** Look at every image and compare it with the spec.
 
-Snapshots render differently across iOS versions, so record and verify on the same runner image: the Mac workflow, `.github/workflows/ios-claude.yml`.
+Snapshots render differently across iOS versions, so record and verify on the same runner image: the Mac workflow, `.github/workflows/ios-claude.yml`. The current images were recorded there on iPhone 17 with iOS 26 (Xcode 26.6).
 
 ## Mac runs
 
