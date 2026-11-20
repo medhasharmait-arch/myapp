@@ -31,7 +31,7 @@ scripts/                      # helper scripts (cloud environment setup, etc.)
 | Android debug APK | `cd android && ./gradlew :app:assembleDebug` | Linux |
 | iOS core logic tests | `swift test --package-path ios/Packages/AppCore` | Linux or macOS |
 | Generate the Xcode project | `cd ios && xcodegen generate` | macOS |
-| iOS build + tests + snapshots | `xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 16'` | macOS |
+| iOS build + tests + snapshots | `xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 17'` | macOS |
 
 ## Rules
 

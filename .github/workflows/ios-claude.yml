@@ -9,7 +9,8 @@
 # The Claude GitHub App must be installed on the repository.
 #
 # macOS minutes cost ~10x Linux minutes: the job only starts for repo owners/members/collaborators,
-# only on labelled PRs, and is capped by timeout-minutes and --max-turns.
+# only on labelled PRs, and is capped by timeout-minutes and --max-turns (the first full
+# build + record + review run took 85 turns and 39 minutes).
 name: ios-claude
 
 on:
@@ -36,7 +37,7 @@ jobs:
           contains(github.event.pull_request.labels.*.name, 'ios'))
       )
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: write
       pull-requests: write
@@ -63,11 +64,18 @@ jobs:
           restore-keys: spm-mac-
 
       - uses: anthropics/claude-code-action@v1
+        env:
+          # This runner's git sets safe.bareRepository=explicit, which stops SwiftPM from
+          # reading its cached package checkouts (bare repos). Allow them for this step only,
+          # through environment config, without editing any git config file.
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: safe.bareRepository
+          GIT_CONFIG_VALUE_0: all
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "@claude"
           use_sticky_comment: true
           claude_args: |
-            --max-turns 60
+            --max-turns 120
             --allowedTools "Read,Write,Edit,Glob,Grep,Bash(xcodegen:*),Bash(xcodebuild:*),Bash(xcrun:*),Bash(swift:*),Bash(git:*),Bash(ls:*),Bash(find:*),Bash(open:*),Bash(sips:*)"
-            --append-system-prompt "You are on a macOS GitHub runner doing the Mac part of this repo's workflow. Read AGENTS.md first and follow it. Mac minutes are scarce: do only what the comment asks, keep the run short, and do not touch android/. Generate the project with `xcodegen generate --spec ios/project.yml` (never edit or commit any .xcodeproj). Build and test with `xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 16'`; if that simulator is missing, pick an available iPhone from `xcrun simctl list devices available` and say which one you used. The snapshot tests record missing reference images on the first run (that run fails by design), so run the tests a second time and confirm they pass. Before committing, Read every PNG under ios/AppTests/__Snapshots__/ and compare it with the spec it belongs to under specs/; fix the SwiftUI code if it does not match, then re-record (delete the stale PNGs and run twice). Commit fixes and images to the PR branch. In your final comment, list each snapshot with a one-line description of what it shows, and anything you could not finish."
+            --append-system-prompt "You are on a macOS GitHub runner doing the Mac part of this repo's workflow. Read AGENTS.md first and follow it. Mac minutes are scarce: do only what the comment asks, keep the run short, and do not touch android/. Generate the project with `xcodegen generate --spec ios/project.yml` (never edit or commit any .xcodeproj). Build and test with `xcodebuild test -project ios/MyApp.xcodeproj -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 17'`; if that simulator is missing, pick an available iPhone from `xcrun simctl list devices available` and say which one you used. The snapshot tests record missing reference images on the first run (that run fails by design), so run the tests a second time and confirm they pass. Before committing, Read every PNG under ios/AppTests/__Snapshots__/ and compare it with the spec it belongs to under specs/; fix the SwiftUI code if it does not match, then re-record (delete the stale PNGs and run twice). Commit fixes and images to the PR branch. In your final comment, list each snapshot with a one-line description of what it shows, and anything you could not finish."
