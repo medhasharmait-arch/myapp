@@ -72,6 +72,8 @@ jobs:
     env:
       API_LEVEL: 36
       MAESTRO_VERSION: 2.12.1
+      # Don't send Maestro's anonymous usage analytics from CI.
+      MAESTRO_CLI_NO_ANALYTICS: "1"
     steps:
       - uses: actions/checkout@v7
 
