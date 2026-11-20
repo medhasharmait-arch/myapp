@@ -43,6 +43,11 @@ if ! command -v swift >/dev/null && [ ! -f "$HOME/.local/share/swiftly/env.sh" ]
     && ./swiftly init --quiet-shell-followup --assume-yes)
   rm -rf "$tmp"
 fi
+# Sessions may run commands in non-login shells that never read .bashrc,
+# so also link the swiftly-managed tools (swift, swiftc, ...) into /usr/local/bin.
+if [ -d "$HOME/.local/share/swiftly/bin" ]; then
+  for tool in "$HOME/.local/share/swiftly/bin/"*; do $SUDO ln -sf "$tool" /usr/local/bin/; done
+fi
 
 echo "== Make the tools visible to every shell =="
 JAVA_HOME_DIR=$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")
