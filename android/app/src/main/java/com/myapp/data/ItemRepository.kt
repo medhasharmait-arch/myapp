@@ -12,6 +12,9 @@ class ItemRepository(private val source: List<Item> = PLANETS) {
 
     fun item(id: String): Item? = source.firstOrNull { it.id == id }
 
+    /** Items whose title or subtitle contains [query] (specs/search.md). */
+    fun search(query: String): List<Item> = source.search(query)
+
     companion object {
         val PLANETS: List<Item> = listOf(
             Item(id = "1", title = "Mercury", subtitle = "Closest to the Sun"),

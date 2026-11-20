@@ -64,7 +64,7 @@ jobs:
             android/app/build/reports/tests/
           retention-days: 3
 
-  # Maestro UI flow (.maestro/starter.yaml) on an Android emulator, using the APK built above.
+  # Every Maestro UI flow in .maestro/ on an Android emulator, using the APK built above.
   e2e:
     needs: build
     runs-on: ubuntu-latest
@@ -133,7 +133,7 @@ jobs:
           disable-animations: true
           script: |
             adb install -r app-debug.apk
-            maestro test -e APP_ID=com.myapp --format junit --output maestro-report.xml --debug-output maestro-debug .maestro/starter.yaml
+            maestro test -e APP_ID=com.myapp --format junit --output maestro-report.xml --debug-output maestro-debug .maestro/
 
       - name: Upload Maestro report and debug output
         if: always()
