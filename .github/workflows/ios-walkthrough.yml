@@ -9,10 +9,13 @@
 # Output:
 #   - the video, uploaded to the `walkthroughs` pre-release so it plays straight in a browser
 #     (PRs get a comment with the link); release assets survive until replaced
+#   - an Appetize upload of the same build, linked in the PR comment, to tap through in a browser
 #   - artifacts (3 days): walkthrough.mp4, Maestro report + debug output, and MyApp.app zipped
-#     (the unsigned simulator build, reused later for Appetize)
+#     (the unsigned simulator build)
 #
-# No secrets needed. macOS minutes are free on this public repo; on a private repo they count 10x.
+# Secrets: APPETIZE_API_TOKEN (optional; the Appetize step is skipped without it).
+# Variables: APPETIZE_PUBLIC_KEY (set after the first upload so every build updates one app).
+# macOS minutes are free on this public repo; on a private repo they count 10x.
 name: ios-walkthrough
 
 on:
@@ -99,6 +102,7 @@ jobs:
             -project ios/MyApp.xcodeproj -scheme MyApp -configuration Debug \
             -sdk iphonesimulator -destination "platform=iOS Simulator,id=$UDID" \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
             | tail -n 30
           APP="$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator/MyApp.app"
           [ -d "$APP" ] || { echo "MyApp.app not found at $APP"; exit 1; }
@@ -142,6 +146,34 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
 
+      # Hands-on check: upload the simulator build to Appetize so it can be tapped through in a browser.
+      # Free plan: 30 streaming minutes a month, 3-minute sessions; uploads don't use minutes.
+      # The first upload creates the app; save its public key as the repo variable APPETIZE_PUBLIC_KEY
+      # (the run summary prints the command) so later runs update the same app and keep one link.
+      - name: Upload to Appetize
+        if: always() && hashFiles('MyApp-simulator.zip') != ''
+        continue-on-error: true   # an Appetize problem must not fail the walk-through
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+          APPETIZE_PUBLIC_KEY: ${{ vars.APPETIZE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$APPETIZE_API_TOKEN" ]; then echo "APPETIZE_API_TOKEN not set; skipping"; exit 0; fi
+          ENDPOINT="https://api.appetize.io/v1/apps${APPETIZE_PUBLIC_KEY:+/$APPETIZE_PUBLIC_KEY}"
+          RESPONSE=$(curl -sS --fail-with-body -X POST "$ENDPOINT" \
+            -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+            -F "file=@MyApp-simulator.zip" -F "platform=ios" \
+            --form-string "note=myapp ${GITHUB_REF_NAME} ${GITHUB_SHA::7}") || {
+              echo "Appetize upload failed: $RESPONSE"; exit 1; }
+          KEY=$(echo "$RESPONSE" | jq -r '.publicKey // empty')
+          [ -n "$KEY" ] || { echo "No publicKey in Appetize response: $RESPONSE"; exit 1; }
+          URL="https://appetize.io/app/$KEY"
+          echo "APPETIZE_URL=$URL" >> "$GITHUB_ENV"
+          echo "Appetize: $URL" >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+            printf '\nFirst Appetize upload. Keep one link for every build by running:\n\n    gh variable set APPETIZE_PUBLIC_KEY --repo %s --body %s\n' \
+              "${{ github.repository }}" "$KEY" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish video to the walkthroughs release
         if: always() && hashFiles('walkthrough.mp4') != ''
         env:
@@ -162,8 +194,10 @@ jobs:
           # One comment per PR, updated in place on every run.
           MARKER="<!-- ios-walkthrough -->"
           if [ "$OUTCOME" = "success" ]; then RESULT="✅ all Maestro flows passed"; else RESULT="❌ a Maestro flow failed (see the run's maestro-debug artifact)"; fi
-          BODY=$(printf '%s\n### 🎬 iOS walk-through\n**[Watch the video](%s)** on %s, commit `%s`\n\n%s. [Run details](%s)\n' \
-            "$MARKER" "$URL" "$DEVICE_NAME" "${HEAD_SHA::7}" "$RESULT" \
+          TAP=""
+          [ -n "${APPETIZE_URL:-}" ] && TAP=" · **[Tap through it on Appetize](${APPETIZE_URL})** (3-minute sessions, 30 free minutes a month)"
+          BODY=$(printf '%s\n### 🎬 iOS walk-through\n**[Watch the video](%s)**%s\n\n%s, commit `%s`. %s. [Run details](%s)\n' \
+            "$MARKER" "$URL" "$TAP" "$DEVICE_NAME" "${HEAD_SHA::7}" "$RESULT" \
             "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
           ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
             --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -n1)
