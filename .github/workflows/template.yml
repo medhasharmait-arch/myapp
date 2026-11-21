@@ -1,0 +1,179 @@
+# Checks template/ (the skeleton for new projects, see template/README.md). This repo only: not copied by the template.
+#   drift: template/files/ filled in with this repo's own names must match this repo's workflows, scripts and rules.
+#   sample-*: a project made from the template with new names must build and pass its tests on both platforms.
+# Not a required check. The sample builds run only when template/ or this file changed (or on a manual run).
+name: template
+
+on:
+  pull_request:
+    paths:
+      - "template/**"
+      - ".github/workflows/**"
+      - "scripts/**"
+      - ".gitattributes"
+      - ".gitignore"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+  workflow_dispatch:
+
+concurrency:
+  group: template-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The sample project's names: different from myapp's, so a token left unreplaced shows up.
+  SAMPLE_ARGS: --name Sample --app-id com.example.sample --repo example/sample
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ steps.changes.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Template matches this repo
+        run: |
+          OUT="$RUNNER_TEMP/self"
+          bash template/new-project.sh --name MyApp --app-id com.myapp --ios-id com.myapp.ios \
+            --repo "$GITHUB_REPOSITORY" "$OUT"
+          FAIL=0
+          check() {  # check <file in this repo> <same file from the template>
+            if ! diff -u -B "$2" "$1"; then
+              echo "::error file=$1::$1 and template/files/$1 differ; make the same change in both (AGENTS.md, 'This repo only')"
+              FAIL=1
+            fi
+          }
+          for f in .github/workflows/android.yml .github/workflows/ios-core.yml \
+                   .github/workflows/ios-walkthrough.yml .github/workflows/ios-claude.yml \
+                   scripts/cloud-setup.sh .gitattributes .gitignore CLAUDE.md; do
+            check "$f" "$OUT/$f"
+          done
+          # AGENTS.md here has an extra "This repo only" section at the end; compare what comes before it.
+          sed '/^## This repo only/,$d' AGENTS.md > "$RUNNER_TEMP/AGENTS.md"
+          check "$RUNNER_TEMP/AGENTS.md" "$OUT/AGENTS.md"
+          [ "$FAIL" -eq 0 ] && echo "No drift"
+          exit "$FAIL"
+
+      - name: Did template/ change?
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ]; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          FILES=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')
+          if grep -qE '^(template/|\.github/workflows/template\.yml$)' <<< "$FILES"; then BUILD=true; else BUILD=false; fi
+          echo "template/ changed: $BUILD"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+
+  sample-android:
+    needs: drift
+    if: needs.drift.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Make the sample project
+        run: bash template/new-project.sh $SAMPLE_ARGS "$RUNNER_TEMP/sample"
+
+      # Same JDKs as android.yml: 21 for Robolectric, 17 (last, so JAVA_HOME) for the build.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests + screenshot check + debug APK
+        working-directory: ${{ runner.temp }}/sample/android
+        run: ./gradlew :app:testDebugUnitTest :app:verifyRoborazziDebug :app:assembleDebug
+
+      - name: Check the package was renamed
+        run: |
+          APK="$RUNNER_TEMP/sample/android/app/build/outputs/apk/debug/app-debug.apk"
+          ls -lh "$APK"
+          grep -rq "package com.example.sample" "$RUNNER_TEMP/sample/android/app/src/main/java/com/example/sample/"
+
+      - name: Upload screenshot diffs and test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sample-android-reports
+          path: |
+            ${{ runner.temp }}/sample/android/app/build/outputs/roborazzi/
+            ${{ runner.temp }}/sample/android/app/build/reports/tests/
+          retention-days: 3
+
+  sample-ios-core:
+    needs: drift
+    if: needs.drift.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: swift:6.4-noble
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Make the sample project
+        run: bash template/new-project.sh $SAMPLE_ARGS /tmp/sample
+
+      - name: swift test
+        run: swift test --package-path /tmp/sample/ios/Packages/AppCore
+
+  # The SwiftUI app and its snapshot tests, on the same runner image the images were recorded on.
+  sample-ios-app:
+    needs: drift
+    if: needs.drift.outputs.build == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      PREFERRED_DEVICE: iPhone 17
+      # Same SwiftPM workaround as ios-claude.yml (safe.bareRepository=explicit on this runner).
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.bareRepository
+      GIT_CONFIG_VALUE_0: all
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Make the sample project
+        run: bash template/new-project.sh $SAMPLE_ARGS "$RUNNER_TEMP/sample"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Pick a simulator
+        run: |
+          xcodebuild -version
+          read -r UDID NAME < <(xcrun simctl list devices available -j | jq -r --arg want "$PREFERRED_DEVICE" '
+            [.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))] as $all
+            | (($all | map(select(.name == $want))) + $all)[0] | "\(.udid) \(.name)"')
+          [ -n "$UDID" ] || { echo "No iPhone simulator available"; exit 1; }
+          echo "Using $NAME ($UDID)"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Build and run the snapshot tests
+        working-directory: ${{ runner.temp }}/sample
+        run: |
+          xcodegen generate --spec ios/project.yml
+          set -o pipefail
+          xcodebuild test -project ios/Sample.xcodeproj -scheme Sample \
+            -destination "platform=iOS Simulator,id=$UDID" -resultBundlePath "$RUNNER_TEMP/Sample.xcresult" \
+            | tail -n 60
+
+      - name: Upload the test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sample-ios-results
+          path: ${{ runner.temp }}/Sample.xcresult
+          retention-days: 3

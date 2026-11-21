@@ -1,0 +1,16 @@
+# Search flow (specs/search.md): List -> type "red" -> only Mars -> open Mars.
+# Android: maestro test -e APP_ID=__APP_ID__ .maestro/search.yaml
+# iOS:     maestro test -e APP_ID=__IOS_BUNDLE_ID__ .maestro/search.yaml
+appId: ${APP_ID}
+---
+- launchApp
+- tapOn: "See the planets"
+- assertVisible: "Mercury"
+- tapOn: "Search planets"
+- inputText: "red"
+- assertVisible: "Mars"
+- assertNotVisible: "Mercury"
+- assertNotVisible: "Jupiter"
+- tapOn: "Mars"
+- assertVisible: "The red planet"
+- assertNotVisible: "Search planets"

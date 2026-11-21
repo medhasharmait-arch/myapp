@@ -1,0 +1,224 @@
+# Recorded iOS walk-through: runs every Maestro flow in .maestro/ on an iPhone simulator
+# while recording the screen, so you can watch the app being used on your phone.
+#
+# Triggers:
+#   - add the `walkthrough` label to a PR (re-runs on every push while the label is on)
+#   - every push to main that touches ios/ or .maestro/ (keeps "main-walkthrough.mp4" current)
+#   - manually: Actions -> ios-walkthrough -> Run workflow
+#
+# Output:
+#   - the video, uploaded to the `walkthroughs` pre-release so it plays straight in a browser
+#     (PRs get a comment with the link); release assets survive until replaced
+#   - an Appetize upload of the same build, linked in the PR comment, to tap through in a browser
+#   - artifacts (3 days): walkthrough.mp4, Maestro report + debug output, and __APP_NAME__.app zipped
+#     (the unsigned simulator build)
+#
+# Secrets: APPETIZE_API_TOKEN (optional; the Appetize step is skipped without it).
+# Variables: APPETIZE_PUBLIC_KEY (set after the first upload so every build updates one app).
+# macOS minutes are free on this public repo; on a private repo they count 10x.
+name: ios-walkthrough
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+    paths:
+      - "ios/**"
+      - ".maestro/**"
+      - ".github/workflows/ios-walkthrough.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".maestro/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-walkthrough-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  walkthrough:
+    # On PRs: only with the label, and only for branches in this repo (fork PRs get no write token).
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'walkthrough') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write        # upload the video to the `walkthroughs` release
+      pull-requests: write   # comment the link on the PR
+    env:
+      MAESTRO_VERSION: 2.12.1
+      MAESTRO_CLI_NO_ANALYTICS: "1"
+      # A cold CI simulator needs longer than Maestro's default to start its XCTest driver
+      # (same value as Maestro's own iOS CI).
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "240000"
+      APP_ID: __IOS_BUNDLE_ID__
+      PREFERRED_DEVICE: iPhone 17
+      # Same SwiftPM workaround as ios-claude.yml: this runner's git sets
+      # safe.bareRepository=explicit, which stops SwiftPM reading its cached checkouts.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.bareRepository
+      GIT_CONFIG_VALUE_0: all
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # Maestro needs Java 17+.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Maestro ${{ env.MAESTRO_VERSION }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME"
+          echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-mac-${{ hashFiles('ios/project.yml', 'ios/Packages/**/Package.swift') }}
+          restore-keys: spm-mac-
+
+      - name: Pick a simulator
+        run: |
+          xcodebuild -version
+          # Prefer $PREFERRED_DEVICE, else the first available iPhone on any iOS runtime.
+          read -r UDID NAME < <(xcrun simctl list devices available -j | jq -r --arg want "$PREFERRED_DEVICE" '
+            [.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))] as $all
+            | (($all | map(select(.name == $want))) + $all)[0] | "\(.udid) \(.name)"')
+          [ -n "$UDID" ] || { echo "No iPhone simulator available"; exit 1; }
+          echo "Using $NAME ($UDID)"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          echo "DEVICE_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Build __APP_NAME__ for the simulator
+        run: |
+          xcodegen generate --spec ios/project.yml
+          xcodebuild build \
+            -project ios/__APP_NAME__.xcodeproj -scheme __APP_NAME__ -configuration Debug \
+            -sdk iphonesimulator -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+            | tail -n 30
+          APP="$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator/__APP_NAME__.app"
+          [ -d "$APP" ] || { echo "__APP_NAME__.app not found at $APP"; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          (cd "$(dirname "$APP")" && ditto -c -k --keepParent __APP_NAME__.app "$GITHUB_WORKSPACE/__APP_NAME__-simulator.zip")
+
+      - name: Boot simulator and install the app
+        run: |
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl install "$UDID" "$APP"
+
+      # Start Maestro's XCTest driver once, outside the recording, and keep it installed:
+      # by default every maestro run reinstalls the driver and uninstalls it on exit.
+      - name: Warm up the Maestro driver
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            if maestro --device "$UDID" hierarchy --no-reinstall-driver >/dev/null; then
+              echo "Driver ready (attempt $attempt)"; exit 0
+            fi
+            echo "Driver not ready, retrying ($attempt)"; sleep 10
+          done
+          echo "Maestro driver did not start"; exit 1
+
+      - name: Run Maestro flows while recording
+        run: |
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force walkthrough.mp4 &
+          REC_PID=$!
+          sleep 3
+          set +e
+          maestro --device "$UDID" test --no-reinstall-driver -e APP_ID="$APP_ID" \
+            --format junit --output maestro-report.xml --debug-output maestro-debug .maestro/
+          STATUS=$?
+          set -e
+          sleep 2
+          kill -INT "$REC_PID"   # SIGINT lets simctl finish writing the MP4
+          wait "$REC_PID" || true
+          ls -lh walkthrough.mp4
+          exit "$STATUS"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-walkthrough
+          path: |
+            walkthrough.mp4
+            maestro-report.xml
+            maestro-debug/
+            __APP_NAME__-simulator.zip
+          if-no-files-found: warn
+          retention-days: 3
+
+      # Hands-on check: upload the simulator build to Appetize so it can be tapped through in a browser.
+      # Free plan: 30 streaming minutes a month, 3-minute sessions; uploads don't use minutes.
+      # The first upload creates the app; save its public key as the repo variable APPETIZE_PUBLIC_KEY
+      # (the run summary prints the command) so later runs update the same app and keep one link.
+      - name: Upload to Appetize
+        if: always() && hashFiles('__APP_NAME__-simulator.zip') != ''
+        continue-on-error: true   # an Appetize problem must not fail the walk-through
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+          APPETIZE_PUBLIC_KEY: ${{ vars.APPETIZE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$APPETIZE_API_TOKEN" ]; then echo "APPETIZE_API_TOKEN not set; skipping"; exit 0; fi
+          ENDPOINT="https://api.appetize.io/v1/apps${APPETIZE_PUBLIC_KEY:+/$APPETIZE_PUBLIC_KEY}"
+          RESPONSE=$(curl -sS --fail-with-body -X POST "$ENDPOINT" \
+            -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+            -F "file=@__APP_NAME__-simulator.zip" -F "platform=ios" \
+            --form-string "note=${{ github.event.repository.name }} ${GITHUB_REF_NAME} ${GITHUB_SHA::7}") || {
+              echo "Appetize upload failed: $RESPONSE"; exit 1; }
+          KEY=$(echo "$RESPONSE" | jq -r '.publicKey // empty')
+          [ -n "$KEY" ] || { echo "No publicKey in Appetize response: $RESPONSE"; exit 1; }
+          URL="https://appetize.io/app/$KEY"
+          echo "APPETIZE_URL=$URL" >> "$GITHUB_ENV"
+          echo "Appetize: $URL" >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+            printf '\nFirst Appetize upload. Keep one link for every build by running:\n\n    gh variable set APPETIZE_PUBLIC_KEY --repo %s --body %s\n' \
+              "${{ github.repository }}" "$KEY" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publish video to the walkthroughs release
+        if: always() && hashFiles('walkthrough.mp4') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          OUTCOME: ${{ job.status }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          gh release view walkthroughs >/dev/null 2>&1 || gh release create walkthroughs \
+            --prerelease --target "${{ github.event.repository.default_branch }}" --title "iOS walk-through videos" \
+            --notes "Screen recordings of the Maestro flows on the iOS simulator, made by the ios-walkthrough workflow. Each file is replaced on the next run."
+          if [ -n "$PR" ]; then NAME="pr-$PR-walkthrough.mp4"; else NAME="main-walkthrough.mp4"; fi
+          cp walkthrough.mp4 "$NAME"
+          gh release upload walkthroughs "$NAME" --clobber
+          URL="https://github.com/${{ github.repository }}/releases/download/walkthroughs/$NAME"
+          echo "Video: $URL" >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$PR" ] || exit 0
+          # One comment per PR, updated in place on every run.
+          MARKER="<!-- ios-walkthrough -->"
+          if [ "$OUTCOME" = "success" ]; then RESULT="✅ all Maestro flows passed"; else RESULT="❌ a Maestro flow failed (see the run's maestro-debug artifact)"; fi
+          TAP=""
+          [ -n "${APPETIZE_URL:-}" ] && TAP=" · **[Tap through it on Appetize](${APPETIZE_URL})** (3-minute sessions, 30 free minutes a month)"
+          BODY=$(printf '%s\n### 🎬 iOS walk-through\n**[Watch the video](%s)**%s\n\n%s, commit `%s`. %s. [Run details](%s)\n' \
+            "$MARKER" "$URL" "$TAP" "$DEVICE_NAME" "${HEAD_SHA::7}" "$RESULT" \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+          ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -n1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ID" -f body="$BODY" >/dev/null
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi

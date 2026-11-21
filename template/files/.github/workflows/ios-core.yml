@@ -1,0 +1,58 @@
+name: ios-core
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "ios/Packages/**"
+      - ".github/workflows/ios-core.yml"
+
+concurrency:
+  group: ios-core-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs on every PR so the required checks always report. The real jobs below skip
+  # themselves when no iOS core files changed, and GitHub counts a skipped required check as passed.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Pushes to main are already path-filtered by the trigger.
+          if [ -z "$PR" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          FILES=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')
+          if grep -qE '^(ios/Packages/|\.github/workflows/ios-core\.yml$)' <<< "$FILES"; then RUN=true; else RUN=false; fi
+          echo "iOS core files changed: $RUN"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+  swift-test:
+    name: ios-core-test
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: swift:6.4-noble
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: ios/Packages/AppCore/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Packages/AppCore/Package.swift', 'ios/Packages/AppCore/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: swift test
+        run: swift test --package-path ios/Packages/AppCore

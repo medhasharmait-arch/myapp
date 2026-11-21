@@ -4,7 +4,11 @@ A native mobile app (**Kotlin + Jetpack Compose** on Android, **Swift + SwiftUI*
 zero-cost, fully cloud workflow. Agents work on Linux cloud VMs, borrowed macOS minutes cover the SwiftUI and simulator
 work, and every UI change is reviewed as a committed screenshot diff.
 
-Agents: read [AGENTS.md](AGENTS.md). Features are specified in [specs/](specs/).
+Agents: read [AGENTS.md](AGENTS.md). Features are specified in [specs/](specs/) (start from
+[specs/_TEMPLATE.md](specs/_TEMPLATE.md)). Parked work is in [LATER.md](LATER.md).
+
+**Starting another app?** [template/](template/README.md) has this whole workflow and the starter app, ready to copy
+into a new repo.
 
 ## Setup progress
 
@@ -14,9 +18,8 @@ Agents: read [AGENTS.md](AGENTS.md). Features are specified in [specs/](specs/).
 - [x] 4. CI: [android.yml](.github/workflows/android.yml) (unit + Roborazzi + APK + Maestro on an emulator),
       [ios-core.yml](.github/workflows/ios-core.yml) (`swift test` on Linux),
       [ios-walkthrough.yml](.github/workflows/ios-walkthrough.yml) (Maestro video on the iOS simulator + Appetize)
-- [ ] 5. Codex code review linked to the repo
-- [ ] 6. Android builds on your phone: Firebase App Distribution on merge to `main`
-- [ ] 7. Phone apps: GitHub, Claude, ChatGPT, Firebase App Tester
+- [x] 5. [template/](template/README.md) for new projects, checked by [template.yml](.github/workflows/template.yml)
+- [ ] Later, in [LATER.md](LATER.md): Firebase App Distribution, Codex code review, phone apps, store releases
 
 Codemagic is skipped for now: the repo is public, so GitHub's macOS runners are free and unlimited.
 
@@ -28,6 +31,7 @@ Codemagic is skipped for now: the repo is public, so GitHub's macOS runners are 
 | `ios-core` | every PR (job skips unless `ios/Packages/` changed); pushes to `main` | `ios-core-test` |
 | `ios-walkthrough` | PRs with the `walkthrough` label; pushes to `main` touching `ios/` or `.maestro/`; manual | no |
 | `ios-claude` | `@claude` comment on a PR with the `ios` label | no |
+| `template` | PRs touching `template/`, workflows, `scripts/` or the agent rules (drift check; sample builds when `template/` changed) | no |
 
 - **iOS video:** the PR comment links it; the latest `main` run is
   [main-walkthrough.mp4](https://github.com/medhasharmait-arch/myapp/releases/download/walkthroughs/main-walkthrough.mp4).

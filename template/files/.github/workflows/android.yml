@@ -1,0 +1,168 @@
+name: android
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".maestro/**"
+      - ".github/workflows/android.yml"
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs on every PR so the required checks always report. The real jobs below skip
+  # themselves when no Android files changed, and GitHub counts a skipped required check as passed.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Pushes to main are already path-filtered by the trigger.
+          if [ -z "$PR" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          FILES=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')
+          if grep -qE '^(android/|\.maestro/|\.github/workflows/android\.yml$)' <<< "$FILES"; then RUN=true; else RUN=false; fi
+          echo "Android files changed: $RUN"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: android-build
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+
+      # JDK 21 runs the Robolectric tests (Android SDK 36 needs Java 21); JDK 17 is listed
+      # last so it becomes JAVA_HOME and builds the app, like the cloud environment.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests + screenshot check
+        run: ./gradlew :app:testDebugUnitTest :app:verifyRoborazziDebug
+
+      - name: Debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 3
+
+      - name: Upload screenshot diffs and test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            android/app/build/outputs/roborazzi/
+            android/app/build/reports/tests/
+          retention-days: 3
+
+  # Every Maestro UI flow in .maestro/ on an Android emulator, using the APK built above.
+  e2e:
+    name: android-e2e
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      API_LEVEL: 36
+      MAESTRO_VERSION: 2.12.1
+      # Don't send Maestro's anonymous usage analytics from CI.
+      MAESTRO_CLI_NO_ANALYTICS: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: app-debug
+
+      # Maestro needs Java 17+.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Maestro ${{ env.MAESTRO_VERSION }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME"
+          echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Boot the emulator once and cache its snapshot, so later runs start in seconds.
+      - name: AVD cache
+        uses: actions/cache@v6
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.API_LEVEL }}-google_apis-x86_64
+
+      - name: Create AVD snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "AVD snapshot created"
+
+      - name: Run Maestro flow
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            adb install -r app-debug.apk
+            maestro test -e APP_ID=__APP_ID__ --format junit --output maestro-report.xml --debug-output maestro-debug .maestro/
+
+      - name: Upload Maestro report and debug output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-results
+          path: |
+            maestro-report.xml
+            maestro-debug/
+          retention-days: 3
