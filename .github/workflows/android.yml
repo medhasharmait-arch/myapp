@@ -2,10 +2,6 @@ name: android
 
 on:
   pull_request:
-    paths:
-      - "android/**"
-      - ".maestro/**"
-      - ".github/workflows/android.yml"
   push:
     branches: [main]
     paths:
@@ -21,7 +17,32 @@ permissions:
   contents: read
 
 jobs:
+  # Runs on every PR so the required checks always report. The real jobs below skip
+  # themselves when no Android files changed, and GitHub counts a skipped required check as passed.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Pushes to main are already path-filtered by the trigger.
+          if [ -z "$PR" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          FILES=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')
+          if grep -qE '^(android/|\.maestro/|\.github/workflows/android\.yml$)' <<< "$FILES"; then RUN=true; else RUN=false; fi
+          echo "Android files changed: $RUN"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
   build:
+    name: android-build
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -66,6 +87,7 @@ jobs:
 
   # Every Maestro UI flow in .maestro/ on an Android emulator, using the APK built above.
   e2e:
+    name: android-e2e
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
