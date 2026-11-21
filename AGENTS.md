@@ -3,12 +3,20 @@
 This is a native mobile monorepo: **Android in Kotlin + Jetpack Compose** and **iOS in Swift + SwiftUI**.
 Most work happens on Linux cloud VMs. Only SwiftUI builds and the iOS simulator need macOS.
 
+## Start here
+
+You start with no memory of earlier sessions; the repo is the memory. Read [docs/README.md](docs/README.md) for the
+reading order. Before debugging, search [docs/troubleshooting.md](docs/troubleshooting.md) for the error. Before changing
+how something works, check [docs/decisions.md](docs/decisions.md). Recipes and ready prompts are in
+[docs/playbook.md](docs/playbook.md).
+
 ## Layout
 
 ```text
 AGENTS.md                     # this file
 CLAUDE.md                     # imports this file
 LATER.md                      # parked work: what it gives, what you do, what an agent does
+docs/                         # how it works, playbook, decisions, troubleshooting, setup, history
 specs/                        # one Markdown spec per feature; both apps build from it
 api/openapi.yaml              # shared API contract (added when the app gets a backend)
 android/                      # Gradle, Kotlin, Jetpack Compose
@@ -58,6 +66,8 @@ A task is done when:
 - [ ] the screenshot images are re-recorded and checked by eye,
 - [ ] the spec's acceptance checklist is ticked in the PR description,
 - [ ] the PR links to its spec.
+- [ ] anything the next agent needs is written down: a new fix in `docs/troubleshooting.md`, a choice in
+      `docs/decisions.md`, the milestone in `docs/history.md` ([docs/README.md](docs/README.md) has the table).
 
 ## This repo only
 
@@ -65,8 +75,11 @@ This section is not copied into new projects. `template/` is the skeleton that n
 ([template/README.md](template/README.md)). `template/files/` mirrors this repo with the names replaced by tokens
 (`__APP_NAME__`, `__APP_ID__`, `__APP_PATH__`, `__IOS_BUNDLE_ID__`, `__REPO__`).
 
-- When you change a workflow (other than `template.yml`), `scripts/`, `.gitattributes`, `.gitignore`, `CLAUDE.md`
-  or this file above this section, make the same change in `template/files/` in the same PR. The `template` workflow
-  fails when they drift apart.
+- When you change a workflow (other than `template.yml`), `scripts/`, `.gitattributes`, `.gitignore`, `CLAUDE.md`,
+  this file above this section, or a file in `docs/` other than `history.md`, make the same change in
+  `template/files/` in the same PR. The `template` workflow fails when they drift apart. Write those docs without
+  this repo's own name (say "this repo"), so they read right in every project; names like `com.myapp` and `MyApp`
+  are fine because they become tokens.
+- `docs/history.md` is this repo's own log; the template has a fresh one for each new project.
 - New features of this app stay out of the template. It keeps the starter app as it was when the template was made
   (Hello, the planets list and search), so every new project starts with a working, tested example of each piece.

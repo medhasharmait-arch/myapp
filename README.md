@@ -4,7 +4,8 @@ A native mobile app (**Kotlin + Jetpack Compose** on Android, **Swift + SwiftUI*
 zero-cost, fully cloud workflow. Agents work on Linux cloud VMs, borrowed macOS minutes cover the SwiftUI and simulator
 work, and every UI change is reviewed as a committed screenshot diff.
 
-Agents: read [AGENTS.md](AGENTS.md). Features are specified in [specs/](specs/) (start from
+**New here (person or AI agent)?** Read [AGENTS.md](AGENTS.md), then [docs/](docs/README.md): how it works, a playbook with
+ready prompts, decisions, troubleshooting, setup and history. Features are specified in [specs/](specs/) (start from
 [specs/_TEMPLATE.md](specs/_TEMPLATE.md)). Parked work is in [LATER.md](LATER.md).
 
 **Starting another app?** [template/](template/README.md) has this whole workflow and the starter app, ready to copy
