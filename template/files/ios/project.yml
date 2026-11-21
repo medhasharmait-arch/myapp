@@ -1,0 +1,70 @@
+# XcodeGen spec. The .xcodeproj is generated from this file (`cd ios && xcodegen generate`)
+# and never committed. Edit this file, never the project (AGENTS.md rule 1).
+name: __APP_NAME__
+options:
+  bundleIdPrefix: __APP_ID__
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+packages:
+  AppCore:
+    path: Packages/AppCore
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.19.7"
+
+targets:
+  __APP_NAME__:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    dependencies:
+      - package: AppCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __IOS_BUNDLE_ID__
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: __APP_NAME__
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGNING_ALLOWED: NO
+
+  AppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AppTests
+        excludes:
+          - "__Snapshots__/**"
+    dependencies:
+      - target: __APP_NAME__
+      - package: AppCore
+      - package: SnapshotTesting
+        product: SnapshotTesting
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __IOS_BUNDLE_ID__.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/__APP_NAME__.app/__APP_NAME__"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        CODE_SIGNING_ALLOWED: NO
+
+schemes:
+  __APP_NAME__:
+    build:
+      targets:
+        __APP_NAME__: all
+        AppTests: [test]
+    test:
+      targets:
+        - AppTests

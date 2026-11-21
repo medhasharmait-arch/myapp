@@ -178,7 +178,7 @@ jobs:
           RESPONSE=$(curl -sS --fail-with-body -X POST "$ENDPOINT" \
             -H "X-API-KEY: $APPETIZE_API_TOKEN" \
             -F "file=@MyApp-simulator.zip" -F "platform=ios" \
-            --form-string "note=myapp ${GITHUB_REF_NAME} ${GITHUB_SHA::7}") || {
+            --form-string "note=${{ github.event.repository.name }} ${GITHUB_REF_NAME} ${GITHUB_SHA::7}") || {
               echo "Appetize upload failed: $RESPONSE"; exit 1; }
           KEY=$(echo "$RESPONSE" | jq -r '.publicKey // empty')
           [ -n "$KEY" ] || { echo "No publicKey in Appetize response: $RESPONSE"; exit 1; }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">__APP_NAME__</string>
+    <string name="home_title">Hello!</string>
+    <string name="home_body">Your cloud-built native app is running.</string>
+    <string name="home_button">See the planets</string>
+    <string name="list_title">Planets</string>
+    <string name="list_empty">No planets yet</string>
+    <string name="back">Back</string>
+    <string name="search_hint">Search planets</string>
+    <string name="search_clear">Clear search</string>
+    <string name="list_no_results">No planets match \"%1$s\"</string>
+</resources>
