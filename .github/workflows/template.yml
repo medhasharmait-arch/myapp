@@ -1,5 +1,5 @@
 # Checks template/ (the skeleton for new projects, see template/README.md). This repo only: not copied by the template.
-#   drift: template/files/ filled in with this repo's own names must match this repo's workflows, scripts and rules.
+#   drift: template/files/ filled in with this repo's own names must match this repo's workflows, scripts, rules and docs.
 #   sample-*: a project made from the template with new names must build and pass its tests on both platforms.
 # Not a required check. The sample builds run only when template/ or this file changed (or on a manual run).
 name: template
@@ -14,6 +14,7 @@ on:
       - ".gitignore"
       - "AGENTS.md"
       - "CLAUDE.md"
+      - "docs/**"
   workflow_dispatch:
 
 concurrency:
@@ -53,7 +54,9 @@ jobs:
           }
           for f in .github/workflows/android.yml .github/workflows/ios-core.yml \
                    .github/workflows/ios-walkthrough.yml .github/workflows/ios-claude.yml \
-                   scripts/cloud-setup.sh .gitattributes .gitignore CLAUDE.md; do
+                   scripts/cloud-setup.sh .gitattributes .gitignore CLAUDE.md \
+                   docs/README.md docs/how-it-works.md docs/playbook.md docs/decisions.md \
+                   docs/troubleshooting.md docs/setup.md docs/original-guide.md; do
             check "$f" "$OUT/$f"
           done
           # AGENTS.md here has an extra "This repo only" section at the end; compare what comes before it.

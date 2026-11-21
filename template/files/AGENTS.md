@@ -3,12 +3,20 @@
 This is a native mobile monorepo: **Android in Kotlin + Jetpack Compose** and **iOS in Swift + SwiftUI**.
 Most work happens on Linux cloud VMs. Only SwiftUI builds and the iOS simulator need macOS.
 
+## Start here
+
+You start with no memory of earlier sessions; the repo is the memory. Read [docs/README.md](docs/README.md) for the
+reading order. Before debugging, search [docs/troubleshooting.md](docs/troubleshooting.md) for the error. Before changing
+how something works, check [docs/decisions.md](docs/decisions.md). Recipes and ready prompts are in
+[docs/playbook.md](docs/playbook.md).
+
 ## Layout
 
 ```text
 AGENTS.md                     # this file
 CLAUDE.md                     # imports this file
 LATER.md                      # parked work: what it gives, what you do, what an agent does
+docs/                         # how it works, playbook, decisions, troubleshooting, setup, history
 specs/                        # one Markdown spec per feature; both apps build from it
 api/openapi.yaml              # shared API contract (added when the app gets a backend)
 android/                      # Gradle, Kotlin, Jetpack Compose
@@ -58,3 +66,5 @@ A task is done when:
 - [ ] the screenshot images are re-recorded and checked by eye,
 - [ ] the spec's acceptance checklist is ticked in the PR description,
 - [ ] the PR links to its spec.
+- [ ] anything the next agent needs is written down: a new fix in `docs/troubleshooting.md`, a choice in
+      `docs/decisions.md`, the milestone in `docs/history.md` ([docs/README.md](docs/README.md) has the table).

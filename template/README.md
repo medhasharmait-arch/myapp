@@ -1,6 +1,7 @@
 # Template: a new native mobile project on the zero-cost cloud workflow
 
-Everything `myapp` runs on, ready to copy into a new repo: agent rules, CI for both platforms, the Mac and iOS
+Everything `myapp` runs on, ready to copy into a new repo: agent rules, the docs (how it works, playbook, decisions,
+troubleshooting, setup), CI for both platforms, the Mac and iOS
 simulator workflows, the cloud environment script, spec templates, and the starter app (Kotlin + Compose and
 Swift + SwiftUI) with its tests, screenshots and Maestro flows. A new project starts green on its first PR.
 
@@ -16,6 +17,8 @@ template/
   setup-github.sh    # labels, branch protection with required checks, secrets (needs repo admin)
   files/             # the new project, with names as tokens
     AGENTS.md  CLAUDE.md  README.md  LATER.md  .gitattributes  .gitignore
+    docs/              README (reading order)  how-it-works  playbook  decisions  troubleshooting  setup
+                       history (a fresh log)  original-guide
     .github/workflows/  android.yml  ios-core.yml  ios-walkthrough.yml  ios-claude.yml
     .maestro/          starter.yaml  search.yaml
     scripts/           cloud-setup.sh
@@ -75,8 +78,9 @@ in gh's own prompt.
 > `git clone --depth 1 https://github.com/medhasharmait-arch/myapp /tmp/wf` and then
 > `bash /tmp/wf/template/new-project.sh --name Notes --app-id com.example.notes --repo you/notes .`
 > On a new branch, run `cd android && ./gradlew :app:testDebugUnitTest :app:verifyRoborazziDebug :app:assembleDebug`
-> and `swift test --package-path ios/Packages/AppCore`, then commit everything and open a PR titled
-> "Bootstrap from template". Don't change any file the script wrote unless a check fails.
+> and `swift test --package-path ios/Packages/AppCore`. Put today's date in the first row of the timeline in
+> `docs/history.md`, then commit everything and open a PR titled "Bootstrap from template". Don't change any other
+> file the script wrote unless a check fails.
 
 **4. Check and merge the PR.** CI runs the Android build, screenshot check and Maestro flows on an emulator, and
 `swift test` on Linux. Add the `walkthrough` label to get the iOS simulator video and the Appetize link in a PR
@@ -96,8 +100,8 @@ the planets example: `specs/starter.md`, `specs/search.md`, their flows, screens
 
 `myapp` is where the workflow is tried first; this folder follows it.
 
-- Changes to the workflows, `scripts/`, `.gitattributes`, `.gitignore`, `CLAUDE.md` and `AGENTS.md` are made in both
-  places in the same PR. The `template` workflow (`.github/workflows/template.yml`) fails on drift: it fills the tokens
+- Changes to the workflows, `scripts/`, `.gitattributes`, `.gitignore`, `CLAUDE.md`, `AGENTS.md` and `docs/` (except
+  `history.md`) are made in both places in the same PR. The `template` workflow (`.github/workflows/template.yml`) fails on drift: it fills the tokens
   back in with myapp's own names and compares those files with the repo.
 - The same workflow makes a sample project with new names and builds it: Android unit tests, screenshot check and APK
   on Linux, `swift test` on Linux, and the iOS build plus snapshot tests on a Mac.
